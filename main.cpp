@@ -29,40 +29,49 @@ class Commands : public Base{
     Commands(char *line, int s){
 	status = s;
 	int i = 0;
-
+	
+	//splits up text even further into a format usable by execvp
 	char *chold = strtok(line, " ");
 	while(chold != NULL){
 	    cmd[i] = chold;
 	    chold = strtok(NULL, " ");
 	    i++;
 	}
-
 	cmd[i] = '\0';
     }
 
     bool execute(){
-	if(cmd[0] == "exit")
-	    exit(EXIT_SUCCESS);
+	//exit called
+	if(strcmp(*cmd, "exit") == 0)
+	    exit(0);
 
 	pid_t pid = fork();
 	int ihold;
-
+	
+	//if forking failed
 	if(pid == -1){
-	    cout << "Forking Error!\n";
+	    perror("Forking Failure");
 	    exit(EXIT_FAILURE);
 	}
-
+	
+	//if child
 	else if(pid == 0){
 	    if(execvp(*cmd, cmd) < 0){
-		cout << "Execution Error!\n";
+		perror("Execvp Failure");
 		exit(EXIT_FAILURE);
 	    }
 	}
-
+	
+	//if parent
 	else
 	   pid = wait(&ihold);
+	
+	//if the cmd worked (ie. execvp executed properly)
+	if(ihold == 0)
+	    return true;
 
-	return true;
+	//if cmd failed (eg. <mkdir test> when the directory, test, already exists)
+	return false;
     }
 };
 
@@ -71,32 +80,41 @@ class Command_Line : public Base{
     vector<Base*> line;
     
     void get_vinfo(vector<int> &vstatus, vector<int> &vpos, char *chold){
-	for(int i = 0; i < strlen(chold); i++){
-	    if(chold[i] == ';'){
-		vstatus.push_back(0);
-		vpos.push_back(i+1);
-		chold[i] = '\0';
-	    }
+	//breaks text into segments by setting ;/&&/|| into '\0' chars and saving status/pos info
+	int quoted = 1; //1 for non quotes -1 for quotes
+	for(int i = 0; chold[i] != '\0'; i++){
+	    if(chold[i] == '\"')
+		quoted *= -1;
 
-	    else if(chold[i] == '&' && chold[i+1] == '&'){
-		vstatus.push_back(1);
-		vpos.push_back(i+2);
-		chold[i] = '\0';
-	    }
+	    if(quoted == 1){
+		if(chold[i] == ';'){
+		    vstatus.push_back(0);
+		    vpos.push_back(i+1);
+		    chold[i] = '\0';
+		}
 
-	    else if(chold[i] == '|' && chold[i+1] == '|'){
-		vstatus.push_back(2);
-		vpos.push_back(i+2);
-		chold[i] = '\0';
+	        else if(chold[i] == '&' && chold[i+1] == '&'){
+		    vstatus.push_back(1);
+		    vpos.push_back(i+2);
+		    chold[i] = '\0';
+		}	
+
+		else if(chold[i] == '|' && chold[i+1] == '|'){
+		    vstatus.push_back(2);
+		    vpos.push_back(i+2);
+		    chold[i] = '\0';
+		}
 	    }
 	}
     }
 
     Command_Line(char *input){
+	//cmds status'/position vectors (also count of how many cmds)
 	vector<int> vstatus;
 	vector<int> vpos;
 	get_vinfo(vstatus, vpos, input);
-
+	
+	//creates vector of commands to execute for the line
 	line.push_back(new Commands(input, 0));
 	for(int i = 0; i < vstatus.size(); i++)
 	    line.push_back(new Commands(input + vpos[i], vstatus[i]));
@@ -104,27 +122,34 @@ class Command_Line : public Base{
     
     bool execute(){
 	bool last_cmd_passed;
-
+	
+	//execute vector of commands one by one
 	for(int i = 0; i < line.size(); i++){
+	    //if the first command or first after a semicolon
 	    if(line[i]->status == 0)
 		last_cmd_passed= line[i]->execute();
-
-	    else if(line[i]->status == 1)
+	    
+	    //if after &&
+	    else if(line[i]->status == 1){
 		if(last_cmd_passed)
 		    last_cmd_passed= line[i]->execute();
-
-	    else if(line[i]->status == 2)
+		else
+		    last_cmd_passed= false;
+	    }
+	    
+	    //if after ||
+	    else if(line[i]->status == 2){
 		if(!last_cmd_passed)
 		    last_cmd_passed= line[i]->execute();
-	
-	    else
-		return false;
+		else
+		    last_cmd_passed= false;
+	    }
 	}
-
 	return true;
     }
 };
 
+//removes comments from input string
 void rm_comments(char *input){
     for(int i = 0; input[i] != '\0'; i++)
 	if(input[i] == '#')
