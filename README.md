@@ -12,3 +12,4 @@ Limitations
 -----------
 
 * does not know how to use "cd" command
+* 1000 char for input
