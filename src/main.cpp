@@ -17,6 +17,7 @@ class Base{
     int status;
 
     Base() {};
+    ~Base() {};
 
     virtual bool execute() = 0;
 };
@@ -38,6 +39,11 @@ class Commands : public Base{
 	    i++;
 	}
 	cmd[i] = '\0';
+    }
+
+    ~Commands(){
+	for(int i = 0; i < 256; i++)
+	    delete cmd[i];
     }
 
     bool execute(){
@@ -116,15 +122,22 @@ class Command_Line : public Base{
 	
 	//creates vector of commands to execute for the line
 	line.push_back(new Commands(input, 0));
-	for(int i = 0; i < vstatus.size(); i++)
+	for(unsigned int i = 0; i < vstatus.size(); i++)
 	    line.push_back(new Commands(input + vpos[i], vstatus[i]));
+    }
+
+    ~Command_Line(){
+	while (line.size() > 0){
+	    delete line[line.size() - 1];
+	    line.pop_back();
+	}
     }
     
     bool execute(){
 	bool last_cmd_passed;
 	
 	//execute vector of commands one by one
-	for(int i = 0; i < line.size(); i++){
+	for(unsigned int i = 0; i < line.size(); i++){
 	    //if the first command or first after a semicolon
 	    if(line[i]->status == 0)
 		last_cmd_passed= line[i]->execute();
